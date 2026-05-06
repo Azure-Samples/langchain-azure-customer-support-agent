@@ -1,141 +1,189 @@
-# langchain-azure-customer-support-agent
+<!--
+---
+name: LangChain customer-support agent on Azure (Python)
+description: Multi-step support agent built with LangChain v1 and Azure OpenAI, deployed to Azure Container Apps with azd.
+languages:
+- python
+- bicep
+- azdeveloper
+products:
+- azure-openai
+- azure-container-apps
+- azure-container-registry
+- azure
+page_type: sample
+urlFragment: langchain-azure-customer-support-agent
+---
+-->
 
-A Fin-style customer support agent built with **LangChain v1** on **Azure OpenAI Responses API**, deployed in a single Azure Container App. Optimised aggressively for fast `azd up`.
+# LangChain customer-support agent on Azure (Python)
 
-- **Pattern:** Handoffs (state-machine middleware) — see [LangChain docs](https://docs.langchain.com/oss/python/langchain/multi-agent/handoffs-customer-support).
-- **Models:** `gpt-5.4-mini` (main support driver) + `gpt-5-nano` (cheap utility model for refine / validate / summarise — **15× cheaper input** than the main).
-- **Reliability layer:** Fin-inspired refine → retrieve → optional rerank → generate → validate.
-- **No Postgres, no MCP server.** Help-center search is in-memory NumPy cosine over pre-computed embeddings. Tools are in-process Python `@tool`s called via Responses-API function calling.
-- **One Container App.** AOAI + ACR + Container Apps env + Log Analytics + App Insights. That's it.
+A production-style customer support chat agent built with **LangChain v1**, **Azure OpenAI Responses API**, and **Azure Container Apps**. One LangChain agent simulates six specialist support roles via a handoffs state machine, with cheap-model reliability layers (refine query, validate response, summarise history) wrapped around the main model.
+
+The whole sample deploys with `azd up` in a single Container App — no database, no vector store, no MCP server. It's the smallest end-to-end shape that still ships realistic reliability primitives.
+
+> [!IMPORTANT]
+> This sample is built to showcase Azure-specific services and patterns. Do not put this code into production without adding authentication, rate limiting, and the security controls described in the [Azure OpenAI Landing Zone reference architecture](https://techcommunity.microsoft.com/blog/azurearchitectureblog/azure-openai-landing-zone-reference-architecture/3882102).
+
+## Table of contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Local development](#local-development)
+- [How it works](#how-it-works)
+- [Project structure](#project-structure)
+- [Clean up](#clean-up)
+- [Resources](#resources)
+
+## Features
+
+- **Single LangChain v1 agent** — `create_agent(...)` with a `gpt-5.4-mini` driver model and a cheap `gpt-5-nano` utility model.
+- **Handoffs state machine** — one agent acts like six specialists (`triage`, `order_lookup`, `returns`, `tech_support`, `product_qna`, `resolution`) by swapping system prompt and tool list per turn.
+- **Reliability middlewares** — `refine_query` (clarify vague input), `validate_response` (groundedness check), `SummarizationMiddleware` (long-conversation memory).
+- **Streaming UI** — Server-Sent-Events stream from the Responses API straight to a single-page web client, with a debug drawer that shows tool calls, handoffs, and citations live.
+- **In-memory data only** — JSON files for customers, orders, products, warranty terms, plus a NumPy KB-embeddings file. No Postgres, no vector DB.
+- **Entra ID auth** — managed identity from the Container App to Azure OpenAI; no API keys.
+- **Bicep + azd** — one Container App, ACR, Container Apps environment, Azure OpenAI, Log Analytics, App Insights.
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    user["User<br/>(browser)"]
+    subgraph aca["Azure Container App · Starlette + LangGraph"]
+      direction TB
+      agent["create_agent · LangChain v1<br/>gpt-5.4-mini · Responses API"]
+      subgraph mw["Middleware chain (wraps every model call)"]
+        direction LR
+        m1["refine<br/>(nano)"] --> m2["apply_step_config<br/>(handoffs)"] --> m3["validate<br/>(nano)"] --> m4["summarise<br/>(nano)"]
+      end
+      tools["14 in-process @tools<br/>workflow · orders · returns<br/>knowledge · wrap-up"]
+      data["In-memory data<br/>customers · orders · products<br/>KB articles + NumPy embeddings"]
+      agent --- mw
+      agent --- tools
+      tools --- data
+    end
+    aoai["Azure OpenAI<br/>gpt-5.4-mini · gpt-5-nano<br/>text-embedding-3-small"]
+    obs["Log Analytics<br/>+ App Insights"]
+    acr["Azure Container<br/>Registry"]
+
+    user -->|HTTPS / SSE| aca
+    aca <-->|Entra ID, no API key| aoai
+    aca -->|telemetry| obs
+    acr -->|pull image| aca
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  Container App: chat                                         │
-│   Starlette + lifespan                                       │
-│    create_agent(                                             │
-│      model = ChatOpenAI(use_responses_api=True),             │
-│      tools = ALL_TOOLS,                                      │
-│      middleware = [                                          │
-│        refine_query,        ← cheap nano LLM                 │
-│        apply_step_config,   ← Handoffs (6 steps)             │
-│        validate_response,   ← cheap nano groundedness check  │
-│        SummarizationMiddleware,                              │
-│      ],                                                      │
-│      state_schema   = SupportState,                          │
-│      checkpointer   = InMemorySaver(),                       │
-│    )                                                         │
-│   In-memory data: customers, orders, products,               │
-│                   warranty_terms, kb_articles + kb_embeddings│
-└──────────────────────────────────────────────────────────────┘
-                ↓ Entra ID, no API key
-┌──────────────────────────────────────────────────────────────┐
-│  Azure OpenAI:  gpt-5.4-mini, gpt-5-nano,                    │
-│                 text-embedding-3-small                       │
-└──────────────────────────────────────────────────────────────┘
-```
 
-### State machine (Handoffs)
+The full editable diagram lives in [docs/architecture.md](docs/architecture.md).
 
-| Step               | Tools                                                                               |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| `triage` (default) | `set_intent`, `lookup_customer_by_email`, `search_help_center`, `escalate_to_human` |
-| `order_lookup`     | `lookup_order`, `get_order_status`, `back_to_triage`                                |
-| `returns`          | `lookup_order`, `check_return_eligibility`, `initiate_return`, `back_to_triage`     |
-| `tech_support`     | `search_help_center`, `check_warranty`, `back_to_triage`                            |
-| `product_qna`      | `semantic_search_products`, `check_warranty`, `back_to_triage`                      |
-| `resolution`       | `create_support_ticket`, `request_csat`, `escalate_to_human`                        |
+## Quick start
 
-Tool-driven transitions: state-mutating tools return `Command(update={"current_step": ...})`. See [app/middleware/steps.py](app/middleware/steps.py).
+### Prerequisites
 
-### Validation modes (`VALIDATION_MODE`)
+- An Azure subscription with permission to create resources and assign roles.
+- [Azure Developer CLI (`azd`)](https://aka.ms/azure-dev/install) `1.10+`.
+- [Azure CLI (`az`)](https://learn.microsoft.com/cli/azure/install-azure-cli) — for `az login`.
+- [Docker](https://docs.docker.com/get-docker/) (only if you want a local image build; `azd up` builds remotely on ACR).
+- Python `3.11+` for local development.
 
-When the model produces a tool-free reply in `tech_support` or `product_qna`, the validate middleware runs a cheap groundedness classifier on the nano model. Behaviour:
-
-- `advisory` — log only, ship the reply as-is.
-- `rewrite` (**default**) — replace the reply with _"I couldn't find that in our help center. Would you like me to connect you with a human?"_ and surface yes/no suggestion chips. The next turn's "yes" triggers `escalate_to_human`. **No silent escalations.**
-- `escalate` — call `escalate_to_human` immediately.
-
-## Deploy
+### Deploy
 
 ```bash
+git clone https://github.com/Azure-Samples/langchain-azure-customer-support-agent
+cd langchain-azure-customer-support-agent
 az login
 azd up
 ```
 
-Targets `~3-4 minutes` cold from `azd up` to working chat:
+You'll be asked for an environment name and a region. Pick a region that has the chosen models — `swedencentral` and `eastus2` both work. `azd up` provisions the infra, builds the container image on ACR, and deploys to Container Apps. When it finishes, the chat URL is printed — open it in a browser.
 
-| Phase                                  | ~Time |
-| -------------------------------------- | ----- |
-| RG + identities + ACR + monitoring     | 30s   |
-| AOAI + 3 deployments (main/nano/embed) | 90s   |
-| Container Apps env                     | 60s   |
-| Image build (uv + BuildKit cache)      | 45s   |
-| Container App + first revision         | 45s   |
+Typical end-to-end time from `azd up`:
 
-After `azd up`, browse to the URL printed in `CHAT_URL`.
+| Phase | Approx. time |
+|---|---|
+| Resource group + identities + ACR + monitoring | 30s |
+| Azure OpenAI + 3 model deployments | 90s |
+| Container Apps environment | 60s |
+| Image build (uv + BuildKit cache) | 45s |
+| Container App + first revision | 45s |
 
-## Local dev
+### Try it
+
+Open the URL printed by `azd` and try:
+
+- *"Where is my most recent order?"*
+- *"I need to return something I bought."*
+- *"My drill won't turn on."*
+- *"Do you sell a 16oz claw hammer?"*
+
+Click the bug icon in the bottom-left to see the live debug drawer (tool calls, handoffs, citations).
+
+## Local development
 
 ```bash
-cp .env.example .env       # set AZURE_OPENAI_ENDPOINT
+cp .env.example .env       # then set AZURE_OPENAI_ENDPOINT
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 az login                   # for DefaultAzureCredential
 uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000.
+Open <http://localhost:8000>. Local dev still talks to the Azure OpenAI deployment created by `azd up` (or whatever endpoint you set in `.env`).
 
-## Data
+## How it works
 
-All data is committed and loaded into memory at startup:
+There is **only one LangChain agent**. It calls the LLM through a four-middleware chain that runs on every turn:
 
-| File                       | What                                                           |
-| -------------------------- | -------------------------------------------------------------- |
-| `data/customers.json`      | 50 mock customers                                              |
-| `data/orders.json`         | 200 mock orders                                                |
-| `data/products.json`       | 30 representative SKUs (with `description_embedding`)          |
-| `data/warranty_terms.json` | 4 category-level warranty rules                                |
-| `data/kb_articles.json`    | 12 synthetic Zava help-center articles                         |
-| `data/kb_embeddings.npy`   | NumPy array (12, 1536) — generated on first startup if missing |
+| # | Middleware | Phase | Job |
+|---|---|---|---|
+| 1 | `refine_query` | pre-call | Rewrites vague user messages into explicit queries. |
+| 2 | `apply_step_config` | pre-call | Reads `state["current_step"]` and swaps the system prompt + filters the tool list to that step's allowlist. |
+| 3 | `validate_response` | post-call | Groundedness-checks the model's reply; in `rewrite` mode replaces hallucinations with a safe "ask before escalate" template. |
+| 4 | `SummarizationMiddleware` | pre-call | Built-in. Condenses old messages once history exceeds 4000 tokens. |
 
-To regenerate from scratch (requires the [`langchain-agent-python`](https://github.com/Azure-Samples/langchain-agent-python) repo cloned as a sibling):
+The agent doesn't decide which "specialist" to be — it just calls a tool. Three tools mutate the step:
 
-```bash
-cd data
-python generate_sample_data.py                        # local AOAI endpoint computes embeddings
-python generate_sample_data.py --no-embeddings        # skip; runtime will compute on first start
+- `set_intent(intent)` — called from `triage` and routes to a specialist (`return_or_refund` → `returns`, etc.).
+- `back_to_triage()` — specialist hands back when work is done.
+- `escalate_to_human(reason)` — explicit user-confirmed escalation.
+
+Each returns `Command(update={"current_step": ...})`. LangGraph applies the update, checkpoints state, and on the next turn `apply_step_config` reads the new value and shows the LLM a different prompt and tool subset.
+
+For full speaker-notes-style write-ups, see [docs/slides/layer-1-middlewares.md](docs/slides/layer-1-middlewares.md) and [docs/slides/layer-2-handoffs.md](docs/slides/layer-2-handoffs.md).
+
+## Project structure
+
+```
+app/                      Starlette entrypoint, agent build, middleware, tools, prompts, static UI
+  agent.py                build_agent(): create_agent + middleware chain
+  main.py                 Starlette app, lifespan, /api/chat SSE endpoint
+  state.py                SupportState (current_step, intent, customer_id, ...)
+  middleware/
+    refine.py             nano model rewrites the user query
+    steps.py              apply_step_config — handoffs state machine
+    validate.py           nano model groundedness check
+  tools/                  14 in-process @tools (workflow, orders, returns, kb, ...)
+  prompts/                one .txt file per specialist step
+  static/index.html       chat UI + debug drawer
+data/                     50 customers, 200 orders, 30 products, 4 warranty rows, 12 KB articles
+infra/                    Bicep (Container App, ACR, AOAI, monitoring)
+docs/                     Architecture and slide notes
+tests/                    pytest suite
+azure.yaml                azd service definition
+Dockerfile                Container image (uv + BuildKit)
 ```
 
-## What's different from `langchain-agent-python`?
-
-|             | `langchain-agent-python`  | **this repo**                            |
-| ----------- | ------------------------- | ---------------------------------------- |
-| Pattern     | Single agent + MCP server | Handoffs state machine, in-process tools |
-| Database    | Postgres + pgvector       | None — JSON + NumPy in memory            |
-| Services    | 2 Container Apps          | 1 Container App                          |
-| Cold deploy | ~10-15 min (Postgres)     | ~3-4 min                                 |
-| Models      | gpt-5-mini                | gpt-5.4-mini + gpt-5-nano (cost-tier'd)  |
-| Reliability | none                      | refine + validate + summarise            |
-
-The `langchain-agent-python` template demonstrates the MCP-server pattern; **this** template demonstrates the cheapest, fastest support agent that still ships production-grade reliability primitives.
-
-## Tests
+## Clean up
 
 ```bash
-pip install -e .[dev]
-pytest -q
+azd down --purge
 ```
 
-The integration tests that actually call AOAI are skipped unless `AZURE_OPENAI_ENDPOINT` is set.
+`--purge` deletes the soft-deleted Azure OpenAI resource so you can recreate the same environment name later without quota collisions.
 
-## Credits
+## Resources
 
-- Architecture inspired by [Fin's AI Engine](https://fin.ai/ai-engine) (5-phase: refine → retrieve → rerank → generate → validate).
-- "Do you really need a Vector Search Database?" — Fin's blog informed the in-memory NumPy decision.
-- LangChain customer-support [handoffs tutorial](https://docs.langchain.com/oss/python/langchain/multi-agent/handoffs-customer-support).
-- Bicep / azd shape baselined on [`Azure-Samples/langchain-azure-openai-starter`](https://github.com/Azure-Samples/langchain-azure-openai-starter).
-
-LangChain blue (#1F4FFF) UI is design-inspired only — not officially endorsed.
+- [LangChain v1 — customer support handoffs](https://docs.langchain.com/oss/python/langchain/multi-agent/handoffs-customer-support)
+- [Azure OpenAI Responses API](https://learn.microsoft.com/azure/ai-services/openai/how-to/responses)
+- [Azure Container Apps](https://learn.microsoft.com/azure/container-apps/overview)
+- [Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-developer-cli/)
