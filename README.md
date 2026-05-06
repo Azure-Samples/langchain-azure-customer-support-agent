@@ -20,7 +20,9 @@ urlFragment: langchain-azure-customer-support-agent
 
 A production-style customer support chat agent built with **LangChain v1**, **Azure OpenAI Responses API**, and **Azure Container Apps**. One LangChain agent simulates six specialist support roles via a handoffs state machine, with cheap-model reliability layers (refine query, validate response, summarise history) wrapped around the main model.
 
-The whole sample deploys with `azd up` in a single Container App — no database, no vector store, no MCP server. It's the smallest end-to-end shape that still ships realistic reliability primitives.
+![Chat UI](docs/images/chat.png)
+
+![Agent debug drawer showing tool calls and handoffs live](docs/images/debug.png)
 
 > [!IMPORTANT]
 > This sample is built to showcase Azure-specific services and patterns. Do not put this code into production without adding authentication, rate limiting, and the security controls described in the [Azure OpenAI Landing Zone reference architecture](https://techcommunity.microsoft.com/blog/azurearchitectureblog/azure-openai-landing-zone-reference-architecture/3882102).
