@@ -136,6 +136,15 @@ async def chat(request):
                     msg = chunk
                     metadata = {}
 
+                # Drop chunks from internal nano-utility LLM calls (refine /
+                # validate). They show up in the stream because LangGraph
+                # streams every model call in the graph; we don't want them
+                # in the user's chat bubble. (Tools/handoffs/citations from
+                # the main model are still emitted below.)
+                tags = metadata.get("tags", []) if isinstance(metadata, dict) else []
+                if "nano-utility" in tags:
+                    continue
+
                 # Surface step transitions from the per-chunk metadata.
                 cur_step = None
                 if isinstance(metadata, dict):

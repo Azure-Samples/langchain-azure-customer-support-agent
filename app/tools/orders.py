@@ -38,10 +38,16 @@ def lookup_order(
         return Command(
             update={"messages": [ToolMessage(f"No order found with id {order_id}.", tool_call_id=tool_call_id)]}
         )
+    # Enrich each line item with its 0-based item_index so the model can
+    # pass the correct value to check_return_eligibility / initiate_return.
+    enriched = dict(order)
+    enriched["items"] = [
+        {"item_index": i, **item} for i, item in enumerate(order.get("items", []))
+    ]
     return Command(
         update={
             "order_id": order_id,
-            "messages": [ToolMessage(json.dumps(order, default=str), tool_call_id=tool_call_id)],
+            "messages": [ToolMessage(json.dumps(enriched, default=str), tool_call_id=tool_call_id)],
         }
     )
 
@@ -116,10 +122,14 @@ def get_order_status(
 @tool
 def check_return_eligibility(
     order_id: int,
-    line_item_id: int,
+    item_index: int,
     runtime: ToolRuntime[None, SupportState],
 ) -> str:
-    """Check whether a specific line item from an order is still eligible to return."""
+    """Check whether a specific line item from an order is still eligible to return.
+
+    `item_index` is the 0-based position of the line item in the order's `items` array
+    (the same `item_index` returned by `lookup_order`). It is NOT the product_id.
+    """
     data = _data(runtime)
     if data is None:
         return "Orders not loaded."
@@ -128,8 +138,8 @@ def check_return_eligibility(
         return f"No order found with id {order_id}."
 
     items = order.get("items", [])
-    if not (0 <= line_item_id < len(items)):
-        return f"Line item {line_item_id} is out of range for order {order_id}."
+    if not (0 <= item_index < len(items)):
+        return f"item_index {item_index} is out of range for order {order_id} (has {len(items)} items)."
 
     try:
         order_dt = datetime.fromisoformat(order["order_date"].replace("Z", "+00:00"))
@@ -147,12 +157,16 @@ def check_return_eligibility(
 @tool
 def initiate_return(
     order_id: int,
-    line_item_id: int,
+    item_index: int,
     reason: str,
     runtime: ToolRuntime[None, SupportState],
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:
-    """Create a return (RMA) record. Mutates app data — only call after explicit customer confirmation."""
+    """Create a return (RMA) record. Mutates app data — only call after explicit customer confirmation.
+
+    `item_index` is the 0-based position of the line item in the order's `items`
+    array (same value as returned by `lookup_order`). NOT the product_id.
+    """
     data = _data(runtime)
     if data is None:
         return Command(
@@ -164,16 +178,16 @@ def initiate_return(
             update={"messages": [ToolMessage(f"No order found with id {order_id}.", tool_call_id=tool_call_id)]}
         )
     items = order.get("items", [])
-    if not (0 <= line_item_id < len(items)):
+    if not (0 <= item_index < len(items)):
         return Command(
-            update={"messages": [ToolMessage(f"Line item {line_item_id} not in order.", tool_call_id=tool_call_id)]}
+            update={"messages": [ToolMessage(f"item_index {item_index} not in order.", tool_call_id=tool_call_id)]}
         )
-    item = items[line_item_id]
+    item = items[item_index]
     refund = round(item.get("unit_price", 0) * item.get("quantity", 1), 2)
     rma = {
         "return_id": f"RMA-{uuid.uuid4().hex[:8].upper()}",
         "order_id": order_id,
-        "line_item_id": line_item_id,
+        "item_index": item_index,
         "reason": reason,
         "status": "requested",
         "refund_amount": refund,

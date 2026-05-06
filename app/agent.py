@@ -56,6 +56,9 @@ def build_models() -> tuple[ChatOpenAI, ChatOpenAI, DefaultAzureCredential]:
         api_key=token_provider,
         streaming=False,
         use_responses_api=True,
+        # Tag every nano call so the chat UI can filter its tokens out of
+        # the visible bubble (refine/validate output is internal-only).
+        tags=["nano-utility"],
     )
     return main, nano, credential
 
