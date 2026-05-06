@@ -1,0 +1,74 @@
+[
+  {
+    "article_id": "kb-001",
+    "title": "Returns and refunds policy",
+    "category": "returns",
+    "content": "Most Zava products can be returned within 30 days of purchase for a full refund, provided they are unused and in original packaging. Power tools must include all accessories, manuals, and the battery (if applicable). To start a return, ask the support agent or call your local store. Refunds are issued to the original payment method within 5-7 business days of receipt at the warehouse."
+  },
+  {
+    "article_id": "kb-002",
+    "title": "Shipping times and tracking",
+    "category": "shipping",
+    "content": "Standard shipping takes 3-5 business days within the contiguous US. Expedited shipping (2 day) is available at checkout for an additional fee. You can track your order from your account page or by calling customer service with your order id. Once a package is handed to the carrier, the tracking link will activate within 24 hours."
+  },
+  {
+    "article_id": "kb-003",
+    "title": "Drill not turning on \u2014 troubleshooting",
+    "category": "troubleshooting",
+    "content": "If your cordless drill does not turn on, check the following in order: 1) Battery is fully charged and seated correctly. 2) Trigger lock-off button (above the trigger) is in the unlocked position. 3) Battery contacts are clean (wipe with a dry cloth). 4) The switch is set forward (not in the center safety position). If none of these resolve the issue, the tool may be defective and is covered under our 2 year power-tool warranty."
+  },
+  {
+    "article_id": "kb-004",
+    "title": "How to file a warranty claim",
+    "category": "warranty",
+    "content": "To file a warranty claim, you'll need your order number and a brief description of the defect. Hand tools have a lifetime warranty against manufacturing defects; power tools have a 2 year limited warranty; consumables (blades, drill bits) are not covered. The support agent can start a warranty claim and ship a replacement directly."
+  },
+  {
+    "article_id": "kb-005",
+    "title": "Saw blade replacement",
+    "category": "troubleshooting",
+    "content": "Always unplug the saw or remove the battery before changing a blade. Use the blade wrench supplied with the saw. Loosen the arbor bolt counter-clockwise (left-hand thread on most circular saws \u2014 check the arrow on the blade guard). Clean the arbor, fit the new blade with teeth pointing forward, and tighten firmly."
+  },
+  {
+    "article_id": "kb-006",
+    "title": "Battery care and storage",
+    "category": "troubleshooting",
+    "content": "Lithium-ion batteries last longest when stored at 30-50% charge in a cool, dry place. Avoid full discharge. Charge before storing for more than 30 days. Never leave a battery on the charger long-term. Replace if it no longer holds a charge \u2014 most Zava batteries are warranted for 2 years from purchase."
+  },
+  {
+    "article_id": "kb-007",
+    "title": "Hammer head loose on handle",
+    "category": "troubleshooting",
+    "content": "If the head of a wood-handled hammer becomes loose, it may need a replacement wedge. Drive a new metal wedge into the existing slot. For fiberglass-handled hammers a loose head means the epoxy bond has failed and the hammer should be returned under the lifetime warranty rather than repaired."
+  },
+  {
+    "article_id": "kb-008",
+    "title": "Wrong item received",
+    "category": "returns",
+    "content": "If you received a different product than what you ordered, contact support within 30 days. We'll send a replacement and a prepaid return label for the wrong item \u2014 you do not pay for either. Have your order id ready when you reach out."
+  },
+  {
+    "article_id": "kb-009",
+    "title": "Damaged in shipping",
+    "category": "returns",
+    "content": "Items that arrive damaged should be reported within 7 days. Take a photo of the box and the damaged product, and message support. We will ship a replacement immediately and arrange pickup of the damaged item \u2014 no return label needed at your end."
+  },
+  {
+    "article_id": "kb-010",
+    "title": "Saw safety basics",
+    "category": "safety",
+    "content": "Always wear safety glasses and hearing protection when operating saws. Keep blade guards in place. Never make freehand cuts \u2014 use a fence or guide. Let the blade reach full speed before contact. Keep both hands on the saw and out of the line of cut. Disconnect power before any adjustments."
+  },
+  {
+    "article_id": "kb-011",
+    "title": "Order status meanings",
+    "category": "shipping",
+    "content": "Order statuses: PLACED \u2014 we have received your order; PROCESSING \u2014 we are picking and packing; SHIPPED \u2014 handed to the carrier (tracking link active within 24h); DELIVERED \u2014 marked delivered by the carrier; CANCELED \u2014 order canceled before shipment; RETURNED \u2014 items returned to the warehouse."
+  },
+  {
+    "article_id": "kb-012",
+    "title": "Pricing and price match",
+    "category": "billing",
+    "content": "Zava matches advertised prices from major competitors on identical SKUs. Send a screenshot of the competing price along with your order id within 14 days of purchase and we'll refund the difference. Clearance and bundled items are excluded."
+  }
+]

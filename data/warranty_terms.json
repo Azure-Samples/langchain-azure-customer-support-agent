@@ -1,0 +1,51 @@
+[
+  {
+    "category": "HAND TOOLS",
+    "warranty_months": 999,
+    "covered_defects": [
+      "manufacturing defects",
+      "head separation",
+      "handle splitting"
+    ],
+    "exclusions": [
+      "normal wear",
+      "abuse",
+      "modification"
+    ]
+  },
+  {
+    "category": "POWER TOOLS",
+    "warranty_months": 24,
+    "covered_defects": [
+      "motor failure",
+      "switch failure",
+      "gearbox failure"
+    ],
+    "exclusions": [
+      "consumables (blades, bits)",
+      "battery (separate 24-month warranty)",
+      "drop damage"
+    ]
+  },
+  {
+    "category": "POWER TOOL ACCESSORIES",
+    "warranty_months": 12,
+    "covered_defects": [
+      "manufacturing defects"
+    ],
+    "exclusions": [
+      "normal wear",
+      "consumables"
+    ]
+  },
+  {
+    "category": "FASTENERS",
+    "warranty_months": 12,
+    "covered_defects": [
+      "manufacturing defects"
+    ],
+    "exclusions": [
+      "normal wear"
+    ]
+  }
+]

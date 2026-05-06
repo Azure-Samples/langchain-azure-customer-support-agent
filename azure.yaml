@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: langchain-azure-customer-support-agent
+metadata:
+  template: langchain-azure-customer-support-agent@0.0.1
+  description: A Fin-style customer support agent built with LangChain v1 (handoffs pattern) on Azure OpenAI Responses API and Azure Container Apps.
+
+infra:
+  provider: bicep
+  path: ./infra
+  module: main
+
+services:
+  chat:
+    project: .
+    language: python
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: ./

@@ -1,0 +1,18 @@
+{
+  "analysisServicesServers": "as",
+  "appConfigurationConfigurationStores": "appcs",
+  "appManagedEnvironments": "cae-",
+  "appContainerApps": "ca-",
+  "containerRegistryRegistries": "cr",
+  "cognitiveServicesAccounts": "cog-",
+  "documentDBDatabaseAccounts": "cosmos-",
+  "insightsActionGroups": "ag-",
+  "insightsComponents": "appi-",
+  "keyVaultVaults": "kv-",
+  "managedIdentityUserAssignedIdentities": "id-",
+  "operationalInsightsWorkspaces": "log-",
+  "resourcesResourceGroups": "rg-",
+  "storageStorageAccounts": "st",
+  "webSitesAppService": "app-",
+  "webServerFarms": "plan-"
+}
