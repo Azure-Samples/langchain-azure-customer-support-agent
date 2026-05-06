@@ -125,6 +125,10 @@ async def chat(request):
         full_text: list[str] = []
         last_step: str | None = None
         emitted_doc_ids: set[str] = set()
+        # Per-message dedupe: LangGraph can emit both streaming token deltas
+        # AND a final aggregated chunk with the full cumulative text for the
+        # same message id. Track per-msg-id text we've already streamed.
+        text_by_msg: dict[str, str] = {}
 
         try:
             async for chunk in state.agent.astream(initial_state, config, stream_mode="messages"):
@@ -158,8 +162,28 @@ async def chat(request):
 
                 for ev in iter_message_events(msg):
                     if ev["kind"] == "text":
-                        full_text.append(ev["text"])
-                        yield event({"chunk": ev["text"]})
+                        msg_id = getattr(msg, "id", None) or "_anon_"
+                        chunk_text = ev["text"]
+                        already = text_by_msg.get(msg_id, "")
+                        # Case A: chunk is a *delta* — append it.
+                        new_emit = chunk_text
+                        # Case B: chunk is *cumulative* and starts with what
+                        # we've already emitted — only emit the suffix.
+                        if already and chunk_text.startswith(already):
+                            new_emit = chunk_text[len(already):]
+                        # Case C: chunk repeats text we've already emitted in
+                        # full (final aggregated chunk) — skip.
+                        elif already and chunk_text == already:
+                            continue
+                        # Case D: model produced an exact duplicate paragraph
+                        # (very rare) — also skip.
+                        elif already.endswith(chunk_text):
+                            continue
+                        if not new_emit:
+                            continue
+                        text_by_msg[msg_id] = already + new_emit
+                        full_text.append(new_emit)
+                        yield event({"chunk": new_emit})
                     elif ev["kind"] == "tool":
                         yield event({"tool": ev["tool"]})
                     elif ev["kind"] == "citations":

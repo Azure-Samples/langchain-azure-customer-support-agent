@@ -38,12 +38,20 @@ def lookup_order(
         return Command(
             update={"messages": [ToolMessage(f"No order found with id {order_id}.", tool_call_id=tool_call_id)]}
         )
-    # Enrich each line item with its 0-based item_index so the model can
-    # pass the correct value to check_return_eligibility / initiate_return.
+    # Enrich each line item with its 0-based item_index and a product name so
+    # the model can pass the correct value to check_return_eligibility /
+    # initiate_return AND tell the customer what they actually bought.
     enriched = dict(order)
-    enriched["items"] = [
-        {"item_index": i, **item} for i, item in enumerate(order.get("items", []))
-    ]
+    enriched_items = []
+    for i, item in enumerate(order.get("items", [])):
+        product = data.products_by_id.get(item.get("product_id")) or {}
+        enriched_items.append({
+            "item_index": i,
+            "product_name": product.get("product_name", f"Product #{item.get('product_id')}"),
+            "sku": product.get("sku"),
+            **item,
+        })
+    enriched["items"] = enriched_items
     return Command(
         update={
             "order_id": order_id,
@@ -87,11 +95,20 @@ def list_my_orders(
                 tool_call_id=tool_call_id,
             )]}
         )
-    summary_lines = [
-        f"#{o['order_id']} — {o.get('order_date', '?')[:10]} — "
-        f"${o.get('total_amount', 0):.2f} — {o.get('status', '?')}"
-        for o in matching
-    ]
+    summary_lines = []
+    for o in matching:
+        items = o.get("items", []) or []
+        names = []
+        for item in items:
+            product = data.products_by_id.get(item.get("product_id")) or {}
+            name = product.get("product_name") or f"Product #{item.get('product_id')}"
+            qty = item.get("quantity", 1)
+            names.append(f"{name} x{qty}" if qty != 1 else name)
+        items_summary = ", ".join(names[:3]) + (f" (+{len(names)-3} more)" if len(names) > 3 else "")
+        summary_lines.append(
+            f"#{o['order_id']} — {o.get('order_date', '?')[:10]} — "
+            f"${o.get('total_amount', 0):.2f} — {o.get('status', '?')} — {items_summary}"
+        )
     return Command(
         update={
             "messages": [ToolMessage(

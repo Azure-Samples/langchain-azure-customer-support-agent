@@ -41,6 +41,7 @@ class AppData:
     customers_by_id: dict[int, dict[str, Any]] = field(default_factory=dict)
     orders_by_id: dict[int, dict[str, Any]] = field(default_factory=dict)
     products_by_sku: dict[str, dict[str, Any]] = field(default_factory=dict)
+    products_by_id: dict[int, dict[str, Any]] = field(default_factory=dict)
     warranty_by_category: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -126,6 +127,13 @@ async def load_all() -> AppData:
     data.orders_by_id = {o["order_id"]: o for o in orders if "order_id" in o}
     data.products_by_sku = {p["sku"]: p for p in products if p.get("sku")}
     data.warranty_by_category = {w["category"].lower(): w for w in warranty_terms if w.get("category")}
+    # Order items reference numeric `product_id` values that go beyond the 30
+    # SKUs in the demo catalog. Map each product_id to a real product
+    # deterministically (modulo the catalog) so the agent can show real names.
+    if products:
+        data.products_by_id = {
+            i + 1: products[i % len(products)] for i in range(max(500, len(products)))
+        }
     logger.info(
         "Loaded data: %d customers, %d orders, %d products, %d kb articles",
         len(customers), len(orders), len(products), len(kb_articles),
