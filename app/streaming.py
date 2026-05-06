@@ -18,6 +18,8 @@ import json
 import re
 from typing import Any, Iterable
 
+from langchain_core.messages import AIMessage, AIMessageChunk
+
 _DOC_TAG = re.compile(r"\[([a-zA-Z0-9_\-]+)\]")
 
 
@@ -64,6 +66,13 @@ def iter_message_events(msg: Any) -> Iterable[dict]:
             except Exception:
                 args_preview = str(args)[:120]
         yield {"kind": "tool", "tool": {"name": tool_names[0], "args_preview": args_preview}}
+        return
+
+    # Only stream text from streaming chunks (AIMessageChunk). The final
+    # aggregated AIMessage that LangGraph emits at the end of the model
+    # node has the same content as the concatenated chunks, so emitting
+    # both doubles the reply in the UI.
+    if isinstance(msg, AIMessage) and not isinstance(msg, AIMessageChunk):
         return
 
     content = getattr(msg, "content", None)
